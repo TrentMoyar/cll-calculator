@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <math.h>
+#include <string.h>
 
 #define LUTN 10000
 
@@ -44,7 +45,6 @@ typedef struct {
 
 double clamp(double x) {
     if(x < 0) return 0;
-    if(x > 1) return 1;
     return x;
 }
 
@@ -88,21 +88,53 @@ RdGdBd yccToRdGdBd(YCbCr value,double *lut) {
     temp.Bp = value.Y + 1.8814*value.Cb;
     return EOTFlut(temp,lut);
 }
-
+RpGpBp yccToRpGpBp(YCbCr value) {
+    RpGpBp temp;
+    temp.Rp = value.Y + 1.4746*value.Cr;
+    temp.Gp = value.Y - 0.1645553*value.Cb - 0.57135*value.Cr;
+    temp.Bp = value.Y + 1.8814*value.Cb;
+    return temp;
+}
 void fillarray(double *lut) {
     for(int i = 0; i < LUTN; i++) {
         lut[i] = EOTFind((double)i/(double)LUTN);
     }
 }
 
-int main() {
+char *getFFMPEGstring(char *filename) {
+    char *first = "ffmpeg -threads 8 -i ";
+    char *second =  " -f rawvideo  -";
+    size_t firstlen = strlen(first);
+    size_t secondlen = strlen(second);
+    size_t len = strlen(filename);
+    char *ret = malloc(len + firstlen + secondlen + 1);
+    strcpy(ret,first);
+    strcat(ret,filename);
+    strcat(ret,second);
+    return ret;
+}
+
+double lightlevel(RdGdBd value) {
+    return max(value.Rd,max(value.Gd,value.Bd));
+}
+double plightlevel(RpGpBp value) {
+    return max(value.Rp,max(value.Gp,value.Bp));
+}
+
+int main(int argv, char** argc) {
+    if(argv == 1) {
+        printf("Needs filename argument\n");
+        return 0;
+    }
     frame frame;
     double lut[LUTN];
     fillarray(lut);
     frame.Y = malloc(2*3840*2160);
     frame.Cb = malloc(2*1920*1080);
     frame.Cr = malloc(2*1920*1080);
-    FILE *hdr = popen("ffmpeg -ss 01:00:00 -i ~/Videos/hdr22.mkv -f rawvideo  -", "r");
+    char *ffcall = getFFMPEGstring(argc[1]);
+    FILE *hdr = popen(ffcall, "r");
+    free(ffcall);
     double maxcll =0;
     double maxfall = 0;
     while(readframe(frame,hdr)) {
@@ -111,13 +143,18 @@ int main() {
         for(int y = 140; y < 940; y++) {
             for(int x = 0; x < 1920; x++) {
                 DYDCbDCr quant = {.DY = frame.Y[y*3840 + x*2], .DCb = frame.Cb[y*1920 + x], .DCr = frame.Cr[y*1920 + x]};
-                RdGdBd clls = yccToRdGdBd(dequantize(quant),lut);
-                maxcll = max(maxcll, clls.Bd + clls.Gd + clls.Rd);
-                tempfall += clls.Bd + clls.Gd + clls.Rd;
+                //RdGdBd clls = yccToRdGdBd(dequantize(quant),lut);
+                RpGpBp clls = yccToRpGpBp(dequantize(quant));
+                double level = plightlevel(clls);
+                maxcll = max(maxcll,level);
+                tempfall += EOTFindlut(level, lut);
             }
         }
         maxfall = max(maxfall, tempfall/(1920*1080));
     }
+    free(frame.Y);
+    free(frame.Cb);
+    free(frame.Cr);
     fclose(hdr);
-    printf("%f %f \n", maxcll, maxfall);
+    printf("%f %f \n", EOTFindlut(maxcll,lut), maxfall);
 }
