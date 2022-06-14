@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <math.h>
 #include <string.h>
-#include <signal.h>
 
 #define LUTN 10000
 
@@ -96,6 +95,9 @@ RpGpBp yccToRpGpBp(YCbCr value) {
     temp.Bp = value.Y + 1.8814*value.Cb;
     return temp;
 }
+double RdGdBdtoY(RdGdBd value) {
+    return 0.2627*value.Rd + 0.6780*value.Gd + 0.0593*value.Bd;
+}
 void fillarray(double *lut) {
     for(int i = 0; i < LUTN; i++) {
         lut[i] = EOTFind((double)i/(double)LUTN);
@@ -123,8 +125,8 @@ double plightlevel(RpGpBp value) {
 }
 
 int main(int argv, char** argc) {
-    if(argv < 3) {
-        printf("Needs a specified input and output file\n");
+    if(argv == 1) {
+        printf("Needs filename argument\n");
         return 0;
     }
     frame frame;
@@ -135,22 +137,13 @@ int main(int argv, char** argc) {
     frame.Cr = malloc(2*1920*1080);
     char *ffcall = getFFMPEGstring(argc[1]);
     FILE *hdr = popen(ffcall, "r");
-    FILE *output = fopen(argc[2],"w");
     free(ffcall);
-    double maxcll = 0;
+    double maxcll =0;
     double maxfall = 0;
     size_t fallframe = 0;
     size_t cllframe = 0;
     size_t framei = 0;
     while(readframe(frame,hdr)) {
-        if(framei % 14385 == 14384) {
-            fprintf(output,"MaxCLL = %09.3f at frame %06zu, MaxFALL = %09.3f at frame %06zu\n",maxcll,cllframe,maxfall,fallframe);
-            fflush(output);
-            maxcll = 0;
-            maxfall = 0;
-            fallframe = 0;
-            cllframe = 0;
-        }
         double tempfall = 0;
         double tempcll = 0;
         //printf("yeet\n");
@@ -158,13 +151,12 @@ int main(int argv, char** argc) {
             for(int x = 0; x < 1920; x++) {
                 DYDCbDCr quant = {.DY = frame.Y[y*3840 + x*2], .DCb = frame.Cb[y*1920 + x], .DCr = frame.Cr[y*1920 + x]};
                 //RdGdBd clls = yccToRdGdBd(dequantize(quant),lut);
-                RpGpBp clls = yccToRpGpBp(dequantize(quant));
-                double level = plightlevel(clls);
-                tempcll = max(tempcll,level);
-                tempfall += EOTFindlut(level, lut);
+                RdGdBd clls = yccToRdGdBd(dequantize(quant),lut);
+                double Y = RdGdBdtoY(clls);
+                tempcll = max(tempcll,Y);
+                tempfall += Y;
             }
         }
-        tempcll = EOTFindlut(tempcll,lut);
         if(maxcll < tempcll) {
             maxcll = tempcll;
             cllframe  = framei;
@@ -175,13 +167,10 @@ int main(int argv, char** argc) {
         }
         framei++;
     }
-    fprintf(output,"MaxCLL = %09.3f at frame %06zu, MaxFALL = %09.3f at frame %06zu",maxcll,cllframe,maxfall,fallframe);
     free(frame.Y);
     free(frame.Cb);
     free(frame.Cr);
     fclose(hdr);
-    fclose(output);
-    //printf("%f %zu %f %zu\n", maxcll, cllframe, maxfall, fallframe);
-    //Aladdin: 7959.051132 89709 246.662160 43947
-    //22:  4448.255897 127067 342.619188 62919
+    printf("%f %zu %f %zu\n", maxcll, cllframe, maxfall, fallframe);
+    //22 3677.776398 127067 335.649447 62919
 }
