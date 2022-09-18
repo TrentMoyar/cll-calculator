@@ -60,15 +60,15 @@ int readframe(frame fr, FILE *fi) {
 }
 YCbCr dequantize(DYDCbDCr value) {
     YCbCr ret;
-    ret.Y = ((double)(value.DY) - 64.0)/(876.0);
-    ret.Cb = ((double)(value.DCb) - 512.0)/(896.0);
-    ret.Cr = ((double)(value.DCr) - 512.0)/(896.0);
+    ret.Y = ((double)(value.DY)/4.0 - 16.0)/219.0;
+    ret.Cb = ((double)(value.DCb)/4.0 - 128.0)/224.0;
+    ret.Cr = ((double)(value.DCr)/4.0 - 128.0)/224.0;
     return ret;
 }
 double EOTFind(double Ep) {
-    double num = fmaxf(powf(Ep,1/m2)-c1, 0);
-    double den = c2 - c3*powf(Ep,1/m2);
-    double Y = powf(num/den,1/m1);
+    double num = fmax(pow(Ep,1/m2)-c1, 0);
+    double den = c2 - c3*pow(Ep,1/m2);
+    double Y = pow(num/den,1/m1);
     return 10000*Y;
 }
 double EOTFindlut(double Ep,double *lut) {

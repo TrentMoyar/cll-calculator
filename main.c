@@ -67,9 +67,9 @@ YCbCr dequantize(DYDCbDCr value) {
     return ret;
 }
 double EOTFind(double Ep) {
-    double num = fmaxf(powf(Ep,1/m2)-c1, 0);
-    double den = c2 - c3*powf(Ep,1/m2);
-    double Y = powf(num/den,1/m1);
+    double num = fmax(pow(Ep,1/m2)-c1, 0);
+    double den = c2 - c3*pow(Ep,1/m2);
+    double Y = pow(num/den,1/m1);
     return 10000*Y;
 }
 double EOTFindlut(double Ep,double *lut) {
